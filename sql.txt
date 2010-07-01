@@ -1,0 +1,6 @@
+CREATE TABLE `wp_user_activity` (
+  `active_ID` bigint(20) unsigned NOT NULL auto_increment,
+  `user_ID` bigint(35) NOT NULL default '0',
+  `last_active` bigint(35) NOT NULL default '0',
+  PRIMARY KEY  (`active_ID`)
+) ENGINE=MyISAM;

@@ -1,0 +1,26 @@
+Plugin Name: User Activity
+Author: Andrew Billits
+
+Files:
+----------------------------------------------------------------------
+user-activity.php - goes in /wp-content/mu-plugins
+
+Instructions:
+----------------------------------------------------------------------
+1) Place the files in the specified directories
+2) Visit the plugin page under the site admin - the auto-installer will attempt to install the plugin
+3) If the auto-install does not add the db table(s) for you then run the sql code in "sql.txt" on your wpmu db
+
+Extra Goodies
+----------------------------------------------------------------------
+You can also place the number of active users anywhere on your main blog:
+
+Function:
+
+display_user_activity(PERIOD_IN_MINUTES)
+
+EXample 1:
+display_user_activity(5); will display the number of users online in the last five minutes
+
+Example 2:
+<p>There are currently <?php display_user_activity(1); ?> users online.</p>
