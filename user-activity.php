@@ -1,16 +1,18 @@
 <?php
 /*
 Plugin Name: User Activity
-Plugin URI: 
-Description:
-Author: Andrew Billits
-Version: 1.0.2
-Author URI:
+Plugin URI: http://premium.wpmudev.org/project/user-activity
+Description: Collects user activity data and makes it available via a tab under the Site Admin
+Author: Andrew Billits, Ulrich Sossou
+Version: 1.0.3
+Network: true
+Text Domain: user_activity
+Author URI: http://premium.wpmudev.org/
 WDP ID: 3
 */
 
-/* 
-Copyright 2007-2009 Incsub (http://incsub.com)
+/*
+Copyright 2007-2011 Incsub (http://incsub.com)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License (Version 2 - GPLv2) as published by
@@ -26,201 +28,255 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-//------------------------------------------------------------------------//
-//---Hook-----------------------------------------------------------------//
-//------------------------------------------------------------------------//
-add_action('init', 'user_activity_init');
-function user_activity_init() {
-	user_activity_global_db_sync();
-}
-if ($_GET['page'] == 'user_activity_main'){
-	user_activity_install();
-	user_activity_upgrade();
-}
-add_action('admin_menu', 'user_activity_plug_pages');
-add_action('admin_footer', 'user_activity_global_db_sync');
-add_action('wp_footer', 'user_activity_global_db_sync');
-//------------------------------------------------------------------------//
-//---Functions------------------------------------------------------------//
-//------------------------------------------------------------------------//
-function user_activity_upgrade() {
-	global $wpdb;
-	if (get_site_option( "user_activity_version" ) == '') {
-		add_site_option( 'user_activity_version', '0.0.0' );
-	}
-	
-	if (get_site_option( "user_activity_version" ) == "1.0.0") {
-		// do nothing
-	} else {
-		//upgrade code goes here
-		//update to current version
-		update_site_option( "user_activity_version", "1.0.0" );
-	}
-}
+if( !is_multisite() )
+	exit( 'The User Activity plugin is only compatible with WordPress Multisite.' );
 
-function user_activity_install() {
-	global $wpdb;
-	if (get_site_option( "user_activity_installed" ) == '') {
-		add_site_option( 'user_activity_installed', 'no' );
-	}
-	
-	if (get_site_option( "user_activity_installed" ) == "yes") {
-		// do nothing
-	} else {
-	
-		$user_activity_table1 = "CREATE TABLE `" . $wpdb->base_prefix . "user_activity` (
-  `active_ID` bigint(20) unsigned NOT NULL auto_increment,
-  `user_ID` bigint(35) NOT NULL default '0',
-  `last_active` bigint(35) NOT NULL default '0',
-  PRIMARY KEY  (`active_ID`)
-) ENGINE=MyISAM  DEFAULT CHARSET=latin1 AUTO_INCREMENT=17 ;";
-		$wpdb->query( $user_activity_table1 );
-		update_site_option( "user_activity_installed", "yes" );
-	}
-}
+/**
+ * Plugin main class
+ **/
+class User_Activity {
 
-function user_activity_global_db_sync() {
-	global $wpdb, $wp_roles, $current_user;
-	if ($current_user->ID == ''){
-		//houston... we have a problem. ABORT!!! ABORT!!! Ok, so it's not that dramatic.
-	} else {
-		$tmp_user_activity_count = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE user_ID = '" . $current_user->ID . "'");
-		if ($tmp_user_activity_count == '0') {
-				$wpdb->query( "INSERT INTO " . $wpdb->base_prefix . "user_activity (user_ID, last_active) VALUES ( '" . $current_user->ID . "', '" . time() . "' )" );
-		} else {
-				$wpdb->query( "UPDATE " . $wpdb->base_prefix . "user_activity SET last_active = '" . time() . "' WHERE user_ID = '" . $current_user->ID . "'" );
+	/**
+	 * Current version of the plugin
+	 **/
+	var $current_version = '1.0.3';
+
+	/**
+	 * PHP 4 constructor
+	 **/
+	function User_Activity() {
+		__construct();
+	}
+
+	/**
+	 * PHP 5 constructor
+	 **/
+	function __construct() {
+		add_action( 'admin_init', array( &$this, 'init' ) );
+		add_action( 'admin_menu', array( &$this, 'pre_3_1_network_admin_page' ) );
+		add_action( 'network_admin_menu', array( &$this, 'network_admin_page' ) );
+		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
+		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
+	}
+
+	/**
+	 * PHP 5 constructor
+	 **/
+	function init() {
+		global $plugin_page;
+
+		// maybe upgrade db
+		if( 'user_activity_main' == $plugin_page ) {
+			$this->install();
+			$this->upgrade();
 		}
-		/*
-		$tmp_user_activity_count = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE user_ID = '1'");
-		if ($tmp_nationality_count == '0') {
-				$wpdb->query( "INSERT INTO " . $wpdb->base_prefix . "user_activity (user_ID, last_active) VALUES ( '1', '" . time() . "' )" );
-		} else {
-				$wpdb->query( "UPDATE " . $wpdb->base_prefix . "user_activity SET last_active = '" . time() . "' WHERE user_ID = '1'" );
+	}
+
+	/**
+	 * Update plugin version in the db
+	 **/
+	function upgrade() {
+		if( get_site_option( 'user_activity_version' ) == '' )
+			add_site_option( 'user_activity_version', $this->current_version );
+
+		if( get_site_option( 'user_activity_version' ) !== $this->current_version )
+			update_site_option( 'user_activity_version', $this->current_version );
+	}
+
+	/**
+	 * Create plugin tables
+	 **/
+	function install() {
+		global $wpdb;
+
+		if( get_site_option( 'user_activity_installed' ) == '')
+			add_site_option( 'user_activity_installed', 'no' );
+
+		if( get_site_option( 'user_activity_installed' ) !== 'yes' ) {
+
+			if( @is_file( ABSPATH . '/wp-admin/includes/upgrade.php' ) )
+				include_once( ABSPATH . '/wp-admin/includes/upgrade.php' );
+			else
+				die( __( 'We have problem finding your \'/wp-admin/upgrade-functions.php\' and \'/wp-admin/includes/upgrade.php\'', 'user_activity' ) );
+
+			// choose correct table charset and collation
+			$charset_collate = '';
+			if( $wpdb->supports_collation() ) {
+				if( !empty( $wpdb->charset ) ) {
+					$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
+				}
+				if( !empty( $wpdb->collate ) ) {
+					$charset_collate .= " COLLATE $wpdb->collate";
+				}
+			}
+
+			$user_activity_table = "CREATE TABLE `{$wpdb->base_prefix}user_activity` (
+				`active_ID` bigint(20) unsigned NOT NULL auto_increment,
+				`user_ID` bigint(35) NOT NULL default '0',
+				`last_active` bigint(35) NOT NULL default '0',
+				PRIMARY KEY  (`active_ID`)
+			) $charset_collate;";
+
+			maybe_create_table( "{$wpdb->base_prefix}user_activity", $user_activity_table );
+			update_site_option( 'user_activity_installed', 'yes' );
 		}
-		*/
 	}
+
+	/**
+	 * Create or update current user activity entry
+	 **/
+	function global_db_sync() {
+		global $wpdb, $current_user;
+
+		if ( '' !== $current_user->ID ) {
+			$tmp_user_activity_count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE user_ID = '%d'", $current_user->ID ) );
+
+			if( '0' == $tmp_user_activity_count )
+				$wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->base_prefix}user_activity ( user_ID, last_active ) VALUES ( '%d', '%d' )", $current_user->ID, time() ) );
+			else
+				$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->base_prefix}user_activity SET last_active = '%d' WHERE user_ID = '%d'", time(), $current_user->ID ) );
+		}
+	}
+
+	/**
+	 * Get activity from db for a set period of type
+	 **/
+	function get_activity( $tmp_period ) {
+		global $wpdb, $current_user;
+
+		$tmp_period = ( $tmp_period == '' || $tmp_period == 0 ) ? 1 : $tmp_period;
+		$tmp_period = $tmp_period * 60;
+		$user_current_stamp = time();
+		$tmp_stamp = $user_current_stamp - $tmp_period;
+		$tmp_output = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '%d'", $tmp_stamp ) );
+
+		echo $tmp_output;
+	}
+
+	/**
+	 * Add network admin page
+	 **/
+	function network_admin_page() {
+		add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+	}
+
+	/**
+	 * Add network admin page the old way
+	 **/
+	function pre_3_1_network_admin_page() {
+		add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+	}
+
+	/**
+	 * Admin page output.
+	 **/
+	function page_main_output() {
+		global $wpdb, $wp_roles, $current_user;
+
+		// Allow access for users with correct permissions only
+		if( !current_user_can( 'manage_network_options' ) ) {
+			_e( '<p>Nice Try...</p>', 'user_activity' );
+			return;
+		}
+
+		echo '<div class="wrap">';
+		$current_stamp = time();
+
+		$current_five_minutes = $current_stamp - 300;
+		$current_hour = $current_stamp - 3600;
+		$current_day = $current_stamp - 86400;
+		$current_week = $current_stamp - 604800;
+		$current_month = $current_stamp - 2592000;
+
+		$five_minutes = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_five_minutes'" );
+		$hour = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_hour'" );
+		$day = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_day'" );
+		$week = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_week'" );
+		$month = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_month'" );
+
+		echo '<h2>' . __( 'User Activity', 'user_activity' ) . '</h2>';
+		echo '<h3>' . __( 'Active users in the last:', 'user_activity' ) . '</h3>';
+		echo '<p>';
+		echo sprintf( __( 'Five Minutes: %d', 'user_activity' ), $five_minutes ) . '<br />';
+		echo sprintf( __( 'Hour: %d', 'user_activity' ), $hour ) . '<br />';
+		echo sprintf( __( 'Day: %d', 'user_activity' ), $day ) . '<br />';
+		echo sprintf( __( 'Week: %d', 'user_activity' ), $week ) . '<br />';
+		echo sprintf( __( 'Month: %d', 'user_activity' ), $month ) . '<br />';
+		echo '</p>';
+		echo '<p>' . __( '* Month = 30 days<br />Note: It will take a full thirty days for all of this data to be accurate. For example, if the plugin has been installed for only a day then only "day", "hour", and "five minutes" will contain accurate data.', 'user_activity' ) . '</p>';
+		echo '</div>';
+	}
+
 }
 
-function display_user_activity($tmp_period) {
-	global $wpdb, $wp_roles, $current_user;
-	if ($tmp_period == '' || $tmp_period == 0){
-		$tmp_period = 1;
-	}
-	$tmp_period = $tmp_period * 60;
-	$user_current_stamp = time();
-	$tmp_stamp = $user_current_stamp - $tmp_period;
-	$tmp_output = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $tmp_stamp . "'");
-	
-	echo $tmp_output;
+$user_activity =& new User_Activity();
+
+/**
+ * Display number of active users for a specific period of time
+ **/
+function display_user_activity( $tmp_period ) {
+	global $user_activity;
+
+	echo $user_activity->get_activity( $tmp_period );
 }
 
-function user_activity_plug_pages() {
-	global $wpdb, $wp_roles, $current_user;
-	if ( is_site_admin() ) {
-		add_submenu_page('ms-admin.php', 'User Activity', 'User Activity', 10, 'user_activity_main', 'user_activity_page_main_output');
-	}
-}
-
-//------------------------------------------------------------------------//
-//---Output Functions-----------------------------------------------------//
-//------------------------------------------------------------------------//
-
-function user_activity_output($tmp_minutes = '5',$tmp_limit = '10',$tmp_global_before = '',$tmp_before = '',$tmp_global_after = '',$tmp_after = '',$tmp_avatars = 'yes',$tmp_avatar_size = '32') {
+/**
+ * Display last active users
+ **/
+function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $before = '', $global_after = '', $after = '', $avatars = 'yes', $avatar_size = 32 ) {
 	global $wpdb;
-	
+
 	$user_activity_current_stamp = time();
-	$user_activity_seconds = $tmp_minutes * 60;
+	$user_activity_seconds = $minutes * 60;
 	$user_activity_stamp = $user_activity_current_stamp - $user_activity_seconds;
-	$query = "SELECT * FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_stamp . "' LIMIT " . $tmp_limit;
-	$tmp_active_users = $wpdb->get_results( $query, ARRAY_A );
-	if ( count( $tmp_active_users ) > 0) {
-		echo $tmp_global_before;
-		foreach ($tmp_active_users as $tmp_active_user){
-			echo $tmp_before;
-			//=========================================================//
-			$tmp_username = $wpdb->get_var("SELECT user_login FROM " . $wpdb->users . " WHERE ID = '" . $tmp_active_user['user_ID'] . "'");
-			$tmp_display_name = $wpdb->get_var("SELECT display_name FROM " . $wpdb->users . " WHERE ID = '" . $tmp_active_user['user_ID'] . "'");
-			if ($tmp_display_name == ''){
-				$tmp_display_name = $tmp_username;
-			}
-			$tmp_primary_blog_ID = get_usermeta( $tmp_active_user['user_ID'], "primary_blog" );
-			$tmp_blog_domain = $wpdb->get_var("SELECT domain FROM $wpdb->blogs WHERE blog_id = '" . $tmp_primary_blog_ID . "'");
-			$tmp_blog_path = $wpdb->get_var("SELECT path FROM $wpdb->blogs WHERE blog_id = '" . $tmp_primary_blog_ID . "'");
-			//=========================================================//
-			if ($tmp_avatars == 'yes') {
-				if ($tmp_primary_blog_ID != '') {
-					echo get_avatar($tmp_active_user['user_ID'],$tmp_avatar_size,get_option('avatar_default')) . ' <a href="http://' . $tmp_blog_domain . $tmp_blog_path . '" style="text-decoration:none;border:none;">' . $tmp_display_name . '</a>';
-				} else {
-					echo get_avatar($tmp_active_user['user_ID'],$tmp_avatar_size,get_option('avatar_default')) . ' ' . $tmp_display_name;
-				}
+	$query = $wpdb->prepare( "SELECT * FROM {$wpdb->base_prefix}user_activity WHERE last_active > '%d' LIMIT %d", $user_activity_stamp, (int) $limit );
+	$active_users = $wpdb->get_results( $query, ARRAY_A );
+
+	if ( count( $active_users ) > 0 ) {
+		echo $global_before;
+
+		foreach ( $active_users as $active_user ) {
+			echo $before;
+
+			$user = get_user_by( 'id', $active_user['user_ID'] );
+			$display_name = empty( $user->display_name ) ? $user->display_name : $user->user_login;
+
+			$primary_blog_ID = get_user_meta( $active_user['user_ID'], 'primary_blog' );
+			$blog_domain = $wpdb->get_var( "SELECT domain FROM $wpdb->blogs WHERE blog_id = '$primary_blog_ID'" );
+			$blog_path = $wpdb->get_var( "SELECT path FROM $wpdb->blogs WHERE blog_id = '$primary_blog_ID'" );
+
+			if( 'yes' == $avatars ) {
+
+				if( '' != $primary_blog_ID )
+					echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' <a href="http://' . $blog_domain . $blog_path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
+				else
+					echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' ' . $display_name;
+
 			} else {
-				if ($tmp_primary_blog_ID != '') {
-					echo '<a href="http://' . $tmp_blog_domain . $tmp_blog_path . '">' . $tmp_display_name . '</a>';
-				} else {
-					echo $tmp_display_name;
-				}
+
+				if( '' != $primary_blog_ID )
+					echo '<a href="http://' . $blog_domain . $blog_path . '">' . $display_name . '</a>';
+				else
+					echo $display_name;
+
 			}
-			//=========================================================//
-			echo $tmp_after;
+
+			echo $after;
 		}
-		echo $tmp_global_after;
+
+		echo $global_after;
 	}
 }
 
-//------------------------------------------------------------------------//
-//---Page Output Functions------------------------------------------------//
-//------------------------------------------------------------------------//
+/**
+ * Show notification if WPMUDEV Update Notifications plugin is not installed
+ **/
+if ( !function_exists( 'wdp_un_check' ) ) {
+	add_action( 'admin_notices', 'wdp_un_check', 5 );
+	add_action( 'network_admin_notices', 'wdp_un_check', 5 );
 
-function user_activity_page_main_output() {
-	global $wpdb, $wp_roles, $current_user;
-	
-	if(!current_user_can('manage_options')) {
-		echo "<p>Nice Try...</p>";  //If accessed properly, this message doesn't appear.
-		return;
+	function wdp_un_check() {
+		if ( !class_exists( 'WPMUDEV_Update_Notifications' ) && current_user_can( 'edit_users' ) )
+			echo '<div class="error fade"><p>' . __('Please install the latest version of <a href="http://premium.wpmudev.org/project/update-notifications/" title="Download Now &raquo;">our free Update Notifications plugin</a> which helps you stay up-to-date with the most stable, secure versions of WPMU DEV themes and plugins. <a href="http://premium.wpmudev.org/wpmu-dev/update-notifications-plugin-information/">More information &raquo;</a>', 'wpmudev') . '</a></p></div>';
 	}
-	if (isset($_GET['updated'])) {
-		?><div id="message" class="updated fade"><p><?php _e('' . urldecode($_GET['updatedmsg']) . '') ?></p></div><?php
-	}
-	echo '<div class="wrap">';
-	switch( $_GET[ 'action' ] ) {
-		//---------------------------------------------------//
-		default:
-			$user_activity_current_stamp = time();
-			
-			$user_activity_current_five_minutes = $user_activity_current_stamp - 300;
-			$user_activity_current_hour = $user_activity_current_stamp - 3600;
-			$user_activity_current_day = $user_activity_current_stamp - 86400;
-			$user_activity_current_week = $user_activity_current_stamp - 604800;
-			$user_activity_current_month = $user_activity_current_stamp - 2592000;
-			
-			$user_activity_five_minutes = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_current_five_minutes . "'");
-			$user_activity_hour = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_current_hour . "'");
-			$user_activity_day = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_current_day . "'");
-			$user_activity_week = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_current_week . "'");
-			$user_activity_month = $wpdb->get_var("SELECT COUNT(*) FROM " . $wpdb->base_prefix . "user_activity WHERE last_active > '" . $user_activity_current_month . "'");
-			?>
-			<h2><?php _e('User Activity') ?></h2>
-			<h3>Active users in the last:</h3>
-			<p>Five Minutes: <?php echo $user_activity_five_minutes; ?><br />
-			Hour: <?php echo $user_activity_hour; ?><br />
-			Day: <?php echo $user_activity_day; ?><br />
-			Week: <?php echo $user_activity_week; ?><br />
-			Month*: <?php echo $user_activity_month; ?><br />
-			</p>
-			<p>*Month = 30 days<br />
-            Note: It will take a full thirty days for all of this data to be accurate. For example, if the plugin has been installed for only a day then only "day", "hour", and "five minutes" will contain accurate data.
-            </p>
-			<?php
-		break;
-		//---------------------------------------------------//
-		case "remove":
-		break;
-		//---------------------------------------------------//
-		case "temp":
-		break;
-		//---------------------------------------------------//
-	}
-	echo '</div>';
 }
-
-?>

@@ -1,0 +1,99 @@
+# Translation of the WordPress plugin User Activity 1.0.3 by Andrew Billits, Ulrich Sossou.
+# Copyright (C) 2011 Andrew Billits, Ulrich Sossou
+# This file is distributed under the same license as the User Activity package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2011.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: User Activity 1.0.3\n"
+"Report-Msgid-Bugs-To: http://wordpress.org/tag/user-activity\n"
+"POT-Creation-Date: 2011-01-06 14:25+0100\n"
+"PO-Revision-Date: 2011-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: user-activity.php:100
+msgid ""
+"We have problem finding your '/wp-admin/upgrade-functions.php' and '/wp-"
+"admin/includes/upgrade.php'"
+msgstr ""
+
+#. #-#-#-#-#  user-activity.pot (User Activity 1.0.3)  #-#-#-#-#
+#. Plugin Name of the plugin/theme
+#: user-activity.php:160 user-activity.php:167 user-activity.php:197
+msgid "User Activity"
+msgstr ""
+
+#: user-activity.php:178
+msgid "<p>Nice Try...</p>"
+msgstr ""
+
+#: user-activity.php:198
+msgid "Active users in the last:"
+msgstr ""
+
+#: user-activity.php:200
+#, php-format
+msgid "Five Minutes: %d"
+msgstr ""
+
+#: user-activity.php:201
+#, php-format
+msgid "Hour: %d"
+msgstr ""
+
+#: user-activity.php:202
+#, php-format
+msgid "Day: %d"
+msgstr ""
+
+#: user-activity.php:203
+#, php-format
+msgid "Week: %d"
+msgstr ""
+
+#: user-activity.php:204
+#, php-format
+msgid "Month: %d"
+msgstr ""
+
+#: user-activity.php:206
+msgid ""
+"* Month = 30 days<br />Note: It will take a full thirty days for all of this "
+"data to be accurate. For example, if the plugin has been installed for only "
+"a day then only \"day\", \"hour\", and \"five minutes\" will contain "
+"accurate data."
+msgstr ""
+
+#: user-activity.php:280
+msgid ""
+"Please install the latest version of <a href=\"http://premium.wpmudev.org/"
+"project/update-notifications/\" title=\"Download Now &raquo;\">our free "
+"Update Notifications plugin</a> which helps you stay up-to-date with the "
+"most stable, secure versions of WPMU DEV themes and plugins. <a href="
+"\"http://premium.wpmudev.org/wpmu-dev/update-notifications-plugin-"
+"information/\">More information &raquo;</a>"
+msgstr ""
+
+#. Plugin URI of the plugin/theme
+msgid "http://premium.wpmudev.org/project/user-activity"
+msgstr ""
+
+#. Description of the plugin/theme
+msgid ""
+"Collects user activity data and makes it available via a tab under the Site "
+"Admin"
+msgstr ""
+
+#. Author of the plugin/theme
+msgid "Andrew Billits, Ulrich Sossou"
+msgstr ""
+
+#. Author URI of the plugin/theme
+msgid "http://premium.wpmudev.org/"
+msgstr ""
