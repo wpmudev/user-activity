@@ -4,7 +4,7 @@ Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
 Author: Andrew Billits, Ulrich Sossou
-Version: 1.0.3
+Version: 1.0.4
 Network: true
 Text Domain: user_activity
 Author URI: http://premium.wpmudev.org/
@@ -28,9 +28,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-if( !is_multisite() )
-	exit( 'The User Activity plugin is only compatible with WordPress Multisite.' );
-
 /**
  * Plugin main class
  **/
@@ -39,7 +36,7 @@ class User_Activity {
 	/**
 	 * Current version of the plugin
 	 **/
-	var $current_version = '1.0.3';
+	var $current_version = '1.0.4';
 
 	/**
 	 * PHP 4 constructor
@@ -53,8 +50,12 @@ class User_Activity {
 	 **/
 	function __construct() {
 		add_action( 'admin_init', array( &$this, 'init' ) );
-		add_action( 'admin_menu', array( &$this, 'pre_3_1_network_admin_page' ) );
-		add_action( 'network_admin_menu', array( &$this, 'network_admin_page' ) );
+		if ( is_multisite() ) {
+			add_action( 'admin_menu', array( &$this, 'pre_3_1_network_admin_page' ) );
+			add_action( 'network_admin_menu', array( &$this, 'network_admin_page' ) );
+		} else {
+			add_action( 'admin_menu', array( &$this, 'admin_page' ) );
+		}
 		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
 		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
 	}
@@ -168,16 +169,23 @@ class User_Activity {
 	}
 
 	/**
+	 * Add admin page for singlesite
+	 **/
+	function admin_page() {
+		add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( &$this, 'page_main_output' ) );
+	}
+
+	/**
 	 * Admin page output.
 	 **/
 	function page_main_output() {
 		global $wpdb, $wp_roles, $current_user;
 
 		// Allow access for users with correct permissions only
-		if( !current_user_can( 'manage_network_options' ) ) {
-			_e( '<p>Nice Try...</p>', 'user_activity' );
-			return;
-		}
+		if ( is_multisite() && ! current_user_can( 'manage_network_options' ) )
+			die( __( 'Nice Try...', 'user_activity' ) );
+		elseif ( ! is_multisite() && ! current_user_can( 'manage_options' ) )
+			die( __( 'Nice Try...', 'user_activity' ) );
 
 		echo '<div class="wrap">';
 		$current_stamp = time();
@@ -241,24 +249,13 @@ function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $
 			$user = get_user_by( 'id', $active_user['user_ID'] );
 			$display_name = empty( $user->display_name ) ? $user->display_name : $user->user_login;
 
-			$primary_blog_ID = get_user_meta( $active_user['user_ID'], 'primary_blog' );
-			$blog_domain = $wpdb->get_var( "SELECT domain FROM $wpdb->blogs WHERE blog_id = '$primary_blog_ID'" );
-			$blog_path = $wpdb->get_var( "SELECT path FROM $wpdb->blogs WHERE blog_id = '$primary_blog_ID'" );
+			$primary_blog = get_active_blog_for_user( $active_user['user_ID'] );
 
 			if( 'yes' == $avatars ) {
-
-				if( '' != $primary_blog_ID )
-					echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' <a href="http://' . $blog_domain . $blog_path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
-				else
-					echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' ' . $display_name;
+				echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' <a href="http://' . $primary_blog->domain . $primary_blog->path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
 
 			} else {
-
-				if( '' != $primary_blog_ID )
-					echo '<a href="http://' . $blog_domain . $blog_path . '">' . $display_name . '</a>';
-				else
-					echo $display_name;
-
+				echo '<a href="' . get_site_url( $primary_blog->blog_id, '/' ) . '">' . $display_name . '</a>';
 			}
 
 			echo $after;
