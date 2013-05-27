@@ -4,7 +4,7 @@ Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
 Author: Andrew Billits, Ulrich Sossou
-Version: 1.0.4
+Version: 1.0.5
 Network: true
 Text Domain: user_activity
 Author URI: http://premium.wpmudev.org/
@@ -36,7 +36,7 @@ class User_Activity {
 	/**
 	 * Current version of the plugin
 	 **/
-	var $current_version = '1.0.4';
+	private $current_version = '1.0.5';
 
 	/**
 	 * PHP 4 constructor
@@ -64,24 +64,12 @@ class User_Activity {
 	 * PHP 5 constructor
 	 **/
 	function init() {
-		global $plugin_page;
-
-		// maybe upgrade db
-		if( 'user_activity_main' == $plugin_page ) {
-			$this->install();
-			$this->upgrade();
-		}
-	}
-
-	/**
-	 * Update plugin version in the db
-	 **/
-	function upgrade() {
-		if( get_site_option( 'user_activity_version' ) == '' )
-			add_site_option( 'user_activity_version', $this->current_version );
-
-		if( get_site_option( 'user_activity_version' ) !== $this->current_version )
+		$current_version = get_site_option( 'user_activity_version' );
+		if ( ! $current_version )
 			update_site_option( 'user_activity_version', $this->current_version );
+
+		if ( $current_version != $this->current_version ) 
+			$this->install();
 	}
 
 	/**
@@ -90,37 +78,30 @@ class User_Activity {
 	function install() {
 		global $wpdb;
 
-		if( get_site_option( 'user_activity_installed' ) == '')
-			add_site_option( 'user_activity_installed', 'no' );
+		if( @is_file( ABSPATH . '/wp-admin/includes/upgrade.php' ) )
+			include_once( ABSPATH . '/wp-admin/includes/upgrade.php' );
+		else
+			die( __( 'We have problem finding your \'/wp-admin/upgrade-functions.php\' and \'/wp-admin/includes/upgrade.php\'', 'user_activity' ) );
 
-		if( get_site_option( 'user_activity_installed' ) !== 'yes' ) {
-
-			if( @is_file( ABSPATH . '/wp-admin/includes/upgrade.php' ) )
-				include_once( ABSPATH . '/wp-admin/includes/upgrade.php' );
-			else
-				die( __( 'We have problem finding your \'/wp-admin/upgrade-functions.php\' and \'/wp-admin/includes/upgrade.php\'', 'user_activity' ) );
-
-			// choose correct table charset and collation
-			$charset_collate = '';
-			if( $wpdb->supports_collation() ) {
-				if( !empty( $wpdb->charset ) ) {
-					$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-				}
-				if( !empty( $wpdb->collate ) ) {
-					$charset_collate .= " COLLATE $wpdb->collate";
-				}
+		// choose correct table charset and collation
+		$charset_collate = '';
+		if( $wpdb->supports_collation() ) {
+			if( !empty( $wpdb->charset ) ) {
+				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
 			}
-
-			$user_activity_table = "CREATE TABLE `{$wpdb->base_prefix}user_activity` (
-				`active_ID` bigint(20) unsigned NOT NULL auto_increment,
-				`user_ID` bigint(35) NOT NULL default '0',
-				`last_active` bigint(35) NOT NULL default '0',
-				PRIMARY KEY  (`active_ID`)
-			) $charset_collate;";
-
-			maybe_create_table( "{$wpdb->base_prefix}user_activity", $user_activity_table );
-			update_site_option( 'user_activity_installed', 'yes' );
+			if( !empty( $wpdb->collate ) ) {
+				$charset_collate .= " COLLATE $wpdb->collate";
+			}
 		}
+
+		$user_activity_table = "CREATE TABLE `{$wpdb->base_prefix}user_activity` (
+			`active_ID` bigint(20) unsigned NOT NULL auto_increment,
+			`user_ID` bigint(35) NOT NULL default '0',
+			`last_active` bigint(35) NOT NULL default '0',
+			PRIMARY KEY  (`active_ID`)
+		) $charset_collate;";
+	
+		dbDelta( $user_activity_table );
 	}
 
 	/**
@@ -202,17 +183,116 @@ class User_Activity {
 		$week = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_week'" );
 		$month = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_month'" );
 
-		echo '<h2>' . __( 'User Activity', 'user_activity' ) . '</h2>';
-		echo '<h3>' . __( 'Active users in the last:', 'user_activity' ) . '</h3>';
-		echo '<p>';
-		echo sprintf( __( 'Five Minutes: %d', 'user_activity' ), $five_minutes ) . '<br />';
-		echo sprintf( __( 'Hour: %d', 'user_activity' ), $hour ) . '<br />';
-		echo sprintf( __( 'Day: %d', 'user_activity' ), $day ) . '<br />';
-		echo sprintf( __( 'Week: %d', 'user_activity' ), $week ) . '<br />';
-		echo sprintf( __( 'Month: %d', 'user_activity' ), $month ) . '<br />';
-		echo '</p>';
-		echo '<p>' . __( '* Month = 30 days<br />Note: It will take a full thirty days for all of this data to be accurate. For example, if the plugin has been installed for only a day then only "day", "hour", and "five minutes" will contain accurate data.', 'user_activity' ) . '</p>';
-		echo '</div>';
+		?>
+			<h2><?php _e( 'User Activity', 'user_activity' ); ?></h2>
+			<div class="datagrid">
+				<table>
+					<thead>
+						<tr>
+							<th><?php _e( 'Active users in the last', 'user_activity' ); ?></th>
+							<th><?php _e( 'Stats', 'user_activity' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><?php _e( 'Five Minutes', 'user_activity' ); ?></td>
+							<td><?php echo $five_minutes; ?></td>
+						</tr>
+						<tr class="alt">
+							<td><?php _e( 'Hour', 'user_activity' ); ?></td>
+							<td><?php echo $hour; ?></td>
+						</tr>
+						<tr>
+							<td><?php _e( 'Day', 'user_activity' ); ?></td>
+							<td><?php echo $day; ?></td>
+						</tr>
+						<tr class="alt">
+							<td><?php _e( 'Week', 'user_activity' ); ?></td>
+							<td><?php echo $week; ?></td>
+						</tr>
+						<tr>
+							<td><?php _e( 'Month*', 'user_activity' ); ?></td>
+							<td><?php echo $month; ?></td>
+						</tr>
+					</tbody>
+					<tfoot>
+						<tr>
+							<td colspan="2">
+								<p><strong>* Month = 30 days</strong></p>
+								<p><strong>Note:</strong> It will take a full thirty days for all of this data to be accurate. For example, if the plugin has been installed for only a day then only "day", "hour", and "five minutes" will contain accurate data.</p>
+							</td>
+						</tr>
+					</tfoot>
+				</table>
+			</div>
+			<style>
+				.datagrid table {
+					border-collapse: collapse;
+					text-align: left;
+					width:100%;
+				}
+
+				.datagrid {
+					font: normal 12px/150% Arial, Helvetica, sans-serif;
+					margin-top:15px;
+					background: #fff;
+					overflow: hidden;
+					border: 1px solid #706D6D;
+					border-radius: 3px;
+					width:23%;
+				}
+
+				.datagrid table td,.datagrid table th {
+					padding: 7px 5px;
+				}
+
+				.datagrid table thead th {
+					background: -webkit-gradient( linear, left top, left bottom, color-stop(0.05, #8C8C8C), color-stop(1, #7D7D7D) );
+
+					background: -webkit-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
+					background: -moz-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
+					background: -o-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
+					background: -ms-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
+					background: linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
+					filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#8C8C8C', endColorstr='#7D7D7D');
+					background-color: #8C8C8C;
+					color: #FFFFFF;
+					font-size: 15px;
+					font-weight: bold;
+					border-left: 1px solid #A3A3A3;
+				}
+
+				.datagrid table thead th:first-child {
+					border: none;
+				}
+
+				.datagrid table tbody td {
+					color: #7D7D7D;
+					border-left: 1px solid #DBDBDB;
+					font-size: 12px;
+					font-weight: normal;
+				}
+
+				.datagrid table tbody .alt td {
+					background: #EBEBEB;
+					color: #7D7D7D;
+				}
+
+				.datagrid table tbody td:first-child {
+					border-left: none;
+				}
+
+				.datagrid table tbody tr:last-child td {
+					border-bottom: none;
+				}
+				.datagrid table tfoot {
+					border-top: 1px solid #706D6D;
+					background: #EBEBEB;
+				}
+
+
+			</style>
+		<?php
 	}
 
 }
