@@ -38,6 +38,8 @@ class User_Activity {
 	 **/
 	private $current_version = '1.0.5';
 
+	private $page_id;
+
 	/**
 	 * PHP 4 constructor
 	 **/
@@ -58,18 +60,22 @@ class User_Activity {
 		}
 		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
 		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
+
+		add_action( 'user_activity_remove_old_activity', array( &$this, 'remove_old_activity' ) );
+
 	}
+
+	
 
 	/**
 	 * PHP 5 constructor
 	 **/
 	function init() {
 		$current_version = get_site_option( 'user_activity_version' );
-		if ( ! $current_version )
+		if ( ! $current_version || version_compare( $current_version, $this->current_version ) == -1 ) {
 			update_site_option( 'user_activity_version', $this->current_version );
-
-		if ( $current_version != $this->current_version ) 
 			$this->install();
+		}			
 	}
 
 	/**
@@ -83,25 +89,46 @@ class User_Activity {
 		else
 			die( __( 'We have problem finding your \'/wp-admin/upgrade-functions.php\' and \'/wp-admin/includes/upgrade.php\'', 'user_activity' ) );
 
-		// choose correct table charset and collation
-		$charset_collate = '';
-		if( $wpdb->supports_collation() ) {
-			if( !empty( $wpdb->charset ) ) {
-				$charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-			}
-			if( !empty( $wpdb->collate ) ) {
-				$charset_collate .= " COLLATE $wpdb->collate";
-			}
-		}
+		if ( ! empty( $wpdb->charset ) )
+			$db_charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
+		if ( ! empty( $wpdb->collate ) )
+			$db_charset_collate .= " COLLATE $wpdb->collate";
+		
+		$table = $wpdb->base_prefix . 'user_activity';
+		$sql = "CREATE TABLE $table (
+			active_ID bigint(20) unsigned NOT NULL auto_increment,
+			user_ID bigint(35) NOT NULL default '0',
+			last_active bigint(35) NOT NULL default '0',
+			PRIMARY KEY  (active_ID)
+		      ) ENGINE=MyISAM $db_charset_collate;";
+		dbDelta( $sql );
 
-		$user_activity_table = "CREATE TABLE `{$wpdb->base_prefix}user_activity` (
-			`active_ID` bigint(20) unsigned NOT NULL auto_increment,
-			`user_ID` bigint(35) NOT NULL default '0',
-			`last_active` bigint(35) NOT NULL default '0',
-			PRIMARY KEY  (`active_ID`)
-		) $charset_collate;";
-	
-		dbDelta( $user_activity_table );
+		$table = $wpdb->base_prefix . 'user_activity_log';
+		$sql = "CREATE TABLE $table (
+			log_ID bigint(20) unsigned NOT NULL auto_increment,
+			user_ID bigint(35) NOT NULL default '0',
+			visit_date bigint(35) NOT NULL default '0',
+			PRIMARY KEY  (log_ID),
+			KEY visit_date (visit_date),
+			KEY user_id (user_ID)
+		      ) ENGINE=MyISAM $db_charset_collate;";
+
+		dbDelta( $sql );
+
+		wp_unschedule_event( time(), 'user_activity_remove_old_activity' );
+		wp_schedule_event( time(), 'daily', 'user_activity_remove_old_activity' );
+	}
+
+	function remove_old_activity() {
+		global $wpdb;
+
+		$last_31_days = time() - 2678400;
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_time < %d",
+				$last_31_days
+			)
+		);
 	}
 
 	/**
@@ -117,6 +144,22 @@ class User_Activity {
 				$wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->base_prefix}user_activity ( user_ID, last_active ) VALUES ( '%d', '%d' )", $current_user->ID, time() ) );
 			else
 				$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->base_prefix}user_activity SET last_active = '%d' WHERE user_ID = '%d'", time(), $current_user->ID ) );
+
+			// We'll count a visit every 30 minutes, so a refreshing before 30min will not be considered a visit
+			$visited = get_site_transient( 'user_activity_' . $current_user->ID );
+
+			if ( ! $visited ) {
+				$wpdb->insert(
+					$wpdb->base_prefix . 'user_activity_log',
+					array( 
+						'user_ID' => $current_user->ID,
+						'visit_date' => time()
+					),
+					array( '%d', '%d' )
+				);	
+				set_site_transient( 'user_activity_' . $current_user->ID, true, 1800 );
+			}
+			
 		}
 	}
 
@@ -139,28 +182,46 @@ class User_Activity {
 	 * Add network admin page
 	 **/
 	function network_admin_page() {
-		add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
 	}
 
 	/**
 	 * Add network admin page the old way
 	 **/
 	function pre_3_1_network_admin_page() {
-		add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
 	}
 
 	/**
 	 * Add admin page for singlesite
 	 **/
 	function admin_page() {
-		add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( &$this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( &$this, 'page_main_output' ) );		
+	}
+
+	
+
+	public function setup_meta_boxes() {
+	    wp_enqueue_script( 'postbox' );	 
+	}
+
+
+	/**
+	 * Add a set of custom meta boxes
+	 * 
+	 * @return type
+	 */
+	function active_users_mb() {
+		echo '<table class="form-table">'; 
+        echo "HHHH";
+        echo '</table>';
 	}
 
 	/**
 	 * Admin page output.
 	 **/
 	function page_main_output() {
-		global $wpdb, $wp_roles, $current_user;
+		global $wpdb, $wp_roles, $current_user, $wp_meta_boxes;
 
 		// Allow access for users with correct permissions only
 		if ( is_multisite() && ! current_user_can( 'manage_network_options' ) )
@@ -169,6 +230,10 @@ class User_Activity {
 			die( __( 'Nice Try...', 'user_activity' ) );
 
 		echo '<div class="wrap">';
+		
+		//echo '<div class="postbox">';
+		//do_meta_boxes( 'user_activity_main', 'advanced', 'dfdff' );
+		//echo '</div>';
 		$current_stamp = time();
 
 		$current_five_minutes = $current_stamp - 300;
@@ -183,113 +248,182 @@ class User_Activity {
 		$week = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_week'" );
 		$month = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE last_active > '$current_month'" );
 
+		$now = time();
+		$last_day = $now - 86400;
+		$today_results = $wpdb->get_results( 
+			$wpdb->prepare(
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				$last_day
+			)
+		);
+
+		$last_7_days = $now - 604800;
+		$last_7_days_results = $wpdb->get_results( 
+			$wpdb->prepare(
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				$last_7_days
+			)
+		);
+
+
+		$last_month = $now - 2592000;
+		$last_month_results = $wpdb->get_results( 
+			$wpdb->prepare(
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				$last_month
+			)
+		);
+
 		?>
 			<h2><?php _e( 'User Activity', 'user_activity' ); ?></h2>
-			<div class="datagrid">
-				<table>
-					<thead>
-						<tr>
-							<th><?php _e( 'Active users in the last', 'user_activity' ); ?></th>
-							<th><?php _e( 'Stats', 'user_activity' ); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<td><?php _e( 'Five Minutes', 'user_activity' ); ?></td>
-							<td><?php echo $five_minutes; ?></td>
-						</tr>
-						<tr class="alt">
-							<td><?php _e( 'Hour', 'user_activity' ); ?></td>
-							<td><?php echo $hour; ?></td>
-						</tr>
-						<tr>
-							<td><?php _e( 'Day', 'user_activity' ); ?></td>
-							<td><?php echo $day; ?></td>
-						</tr>
-						<tr class="alt">
-							<td><?php _e( 'Week', 'user_activity' ); ?></td>
-							<td><?php echo $week; ?></td>
-						</tr>
-						<tr>
-							<td><?php _e( 'Month*', 'user_activity' ); ?></td>
-							<td><?php echo $month; ?></td>
-						</tr>
-					</tbody>
-					<tfoot>
-						<tr>
-							<td colspan="2">
-								<p><strong>* Month = 30 days</strong></p>
-								<p><strong>Note:</strong> It will take a full thirty days for all of this data to be accurate. For example, if the plugin has been installed for only a day then only "day", "hour", and "five minutes" will contain accurate data.</p>
-							</td>
-						</tr>
-					</tfoot>
-				</table>
+
+			<div id="poststuff">
+			    <div id="post-body" class="metabox-holder columns-1">
+	                <div id="postbox-container-1" class="postbox-container">
+	                    <div id="advanced-sortables" class="meta-box-sortables ui-sortable">
+							<div id="ua-totals-box" class="postbox" style="display: block;">
+								<div class="handlediv" title="Haz clic para cambiar"><br></div>
+								<h3 class="hndle"><span><?php _e( 'Totals', 'user_activity' ); ?></span></h3>
+								<div class="inside">
+									<table class="form-table">
+										<thead>
+											<th><h4><?php _e( 'Active users in the last', 'user_activity' ); ?></h4></th>
+											<th><h4 class="ua-visits"><?php _e( 'Unique visits', 'user_activity' ); ?></h4></th>
+										</thead>
+										<tbody>
+											<tr>
+												<td><?php _e( 'Five Minutes', 'user_activity' ); ?></td>
+												<td class="ua-visits"><?php echo $five_minutes; ?></td>
+											</tr>
+											<tr>
+												<td><?php _e( 'Hour', 'user_activity' ); ?></td>
+												<td class="ua-visits"><?php echo $hour; ?></td>
+											</tr>
+											<tr>
+												<td><?php _e( 'Day', 'user_activity' ); ?></td>
+												<td class="ua-visits"><?php echo $day; ?></td>
+											</tr>
+											<tr>
+												<td><?php _e( 'Week', 'user_activity' ); ?></td>
+												<td class="ua-visits"><?php echo $week; ?></td>
+											</tr>
+											<tr>
+												<td><?php _e( '30 days', 'user_activity' ); ?></td>
+												<td class="ua-visits"><?php echo $month; ?></td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+							</div>
+
+							<div id="ua-today-box" class="postbox" style="display: block;">
+								<div class="handlediv" title="Haz clic para cambiar"><br></div>
+								<h3 class="hndle"><span><?php _e( 'Today', 'user_activity' ); ?></span></h3>
+								<div class="inside">
+									<table class="form-table">
+										<thead>
+											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+										</thead>
+										<tbody>
+											<?php foreach ( $today_results as $row ): ?>
+												<?php 
+													$user = get_userdata( $row->user_ID ); 
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												?>
+												<tr>
+													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td class="ua-visits"><?php echo $row->visits; ?></td>
+												</tr>
+											<?php endforeach; ?>
+										</tbody>
+
+									</table>
+								</div>
+							</div>
+
+							<div id="ua-seven-days-box" class="postbox" style="display: block;">
+								<div class="handlediv" title="Haz clic para cambiar"><br></div>
+								<h3 class="hndle"><span><?php _e( 'Last 7 days', 'user_activity' ); ?></span></h3>
+								<div class="inside">
+									<table class="form-table">
+										<thead>
+											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+										</thead>
+										<tbody>
+											<?php foreach ( $last_7_days_results as $row ): ?>
+												<?php 
+													$user = get_userdata( $row->user_ID ); 
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												?>
+												<tr>
+													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td class="ua-visits"><?php echo $row->visits; ?></td>
+												</tr>
+											<?php endforeach; ?>
+										</tbody>
+
+									</table>
+								</div>
+							</div>
+
+							<div id="ua-30-days-box" class="postbox" style="display: block;">
+								<div class="handlediv" title="Haz clic para cambiar"><br></div>
+								<h3 class="hndle"><span><?php _e( 'Last 30 days', 'user_activity' ); ?></span></h3>
+								<div class="inside">
+									<table class="form-table">
+										<thead>
+											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+										</thead>
+										<tbody>
+											<?php foreach ( $last_month_results as $row ): ?>
+												<?php 
+													$user = get_userdata( $row->user_ID ); 
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												?>
+												<tr>
+													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td class="ua-visits"><?php echo $row->visits; ?></td>
+												</tr>
+											<?php endforeach; ?>
+										</tbody>
+
+									</table>
+								</div>
+							</div>
+
+						</div>
+	                </div>
+				</div>
 			</div>
+
+			
 			<style>
-				.datagrid table {
-					border-collapse: collapse;
-					text-align: left;
-					width:100%;
+
+				.form-table tr {
+					border-bottom:1px solid #DEDEDE;
 				}
-
-				.datagrid {
-					font: normal 12px/150% Arial, Helvetica, sans-serif;
-					margin-top:15px;
-					background: #fff;
-					overflow: hidden;
-					border: 1px solid #706D6D;
-					border-radius: 3px;
-					width:23%;
+				.form-table tr:last-child {
+					border-bottom:none;
 				}
-
-				.datagrid table td,.datagrid table th {
-					padding: 7px 5px;
+				.postbox {
+					width:20%;
+					margin-right:4%;
+					float:left;
 				}
-
-				.datagrid table thead th {
-					background: -webkit-gradient( linear, left top, left bottom, color-stop(0.05, #8C8C8C), color-stop(1, #7D7D7D) );
-
-					background: -webkit-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
-					background: -moz-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
-					background: -o-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
-					background: -ms-linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
-					background: linear-gradient( center top, #8C8C8C 5%, #7D7D7D 100% );
-					filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#8C8C8C', endColorstr='#7D7D7D');
-					background-color: #8C8C8C;
-					color: #FFFFFF;
-					font-size: 15px;
-					font-weight: bold;
-					border-left: 1px solid #A3A3A3;
-				}
-
-				.datagrid table thead th:first-child {
-					border: none;
-				}
-
-				.datagrid table tbody td {
-					color: #7D7D7D;
-					border-left: 1px solid #DBDBDB;
-					font-size: 12px;
+				.form-table h4 {
+					line-height: 1.7em;
 					font-weight: normal;
+					font-size: 13px;
+					margin: 0 0 .2em;
+					padding: 0;
+					font-family: Georgia, "Times New Roman", "Bitstream Charter", Times, serif;
 				}
-
-				.datagrid table tbody .alt td {
-					background: #EBEBEB;
-					color: #7D7D7D;
+				.ua-visits {
+					text-align:center;
 				}
-
-				.datagrid table tbody td:first-child {
-					border-left: none;
-				}
-
-				.datagrid table tbody tr:last-child td {
-					border-bottom: none;
-				}
-				.datagrid table tfoot {
-					border-top: 1px solid #706D6D;
-					background: #EBEBEB;
-				}
-
 
 			</style>
 		<?php
@@ -357,3 +491,5 @@ if ( !function_exists( 'wdp_un_check' ) ) {
 			echo '<div class="error fade"><p>' . __('Please install the latest version of <a href="http://premium.wpmudev.org/project/update-notifications/" title="Download Now &raquo;">our free Update Notifications plugin</a> which helps you stay up-to-date with the most stable, secure versions of WPMU DEV themes and plugins. <a href="http://premium.wpmudev.org/wpmu-dev/update-notifications-plugin-information/">More information &raquo;</a>', 'wpmudev') . '</a></p></div>';
 	}
 }
+
+
