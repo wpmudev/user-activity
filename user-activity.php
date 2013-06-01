@@ -61,6 +61,8 @@ class User_Activity {
 		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
 		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
 
+		add_filter( 'cron_schedules', array( &$this, 'my_add_minutely' ) );
+
 		add_action( 'user_activity_remove_old_activity', array( &$this, 'remove_old_activity' ) );
 
 	}
@@ -71,11 +73,34 @@ class User_Activity {
 	 * PHP 5 constructor
 	 **/
 	function init() {
+
 		$current_version = get_site_option( 'user_activity_version' );
 		if ( ! $current_version || version_compare( $current_version, $this->current_version ) == -1 ) {
 			update_site_option( 'user_activity_version', $this->current_version );
 			$this->install();
 		}			
+	}
+
+	function my_add_minutely( $schedules ) {
+
+		// add a 'minutely' schedule to the existing set
+		$schedules['minutely'] = array(
+			'interval' => 2, //2 seconds instead of a minute
+			'display' => __('Once minutely')
+		);
+		return $schedules;
+	}
+
+	function remove_old_activity() {
+		error_log("CRON EXECUTING");
+		global $wpdb;
+
+		$last_31_days = time() - 3600;
+		$pq = $wpdb->prepare(
+			"DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_time < %d",
+			$last_31_days
+		);
+		error_log(var_dump($pq));
 	}
 
 	/**
@@ -115,21 +140,12 @@ class User_Activity {
 
 		dbDelta( $sql );
 
-		wp_unschedule_event( time(), 'user_activity_remove_old_activity' );
-		wp_schedule_event( time(), 'daily', 'user_activity_remove_old_activity' );
+		if ( ! wp_next_scheduled( 'user_activity_remove_old_activity' ) )
+			wp_schedule_event( time(), 'minutely', 'user_activity_remove_old_activity' );
+		
 	}
 
-	function remove_old_activity() {
-		global $wpdb;
-
-		$last_31_days = time() - 2678400;
-		$wpdb->query(
-			$wpdb->prepare(
-				"DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_time < %d",
-				$last_31_days
-			)
-		);
-	}
+	
 
 	/**
 	 * Create or update current user activity entry
@@ -252,7 +268,7 @@ class User_Activity {
 		$last_day = $now - 86400;
 		$today_results = $wpdb->get_results( 
 			$wpdb->prepare(
-				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_day
 			)
 		);
@@ -260,7 +276,7 @@ class User_Activity {
 		$last_7_days = $now - 604800;
 		$last_7_days_results = $wpdb->get_results( 
 			$wpdb->prepare(
-				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_7_days
 			)
 		);
@@ -269,7 +285,7 @@ class User_Activity {
 		$last_month = $now - 2592000;
 		$last_month_results = $wpdb->get_results( 
 			$wpdb->prepare(
-				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID LIMIT 8",
+				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_month
 			)
 		);
@@ -330,9 +346,10 @@ class User_Activity {
 												<?php 
 													$user = get_userdata( $row->user_ID ); 
 													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
-													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td><?php echo $user_link; ?></td>
 													<td class="ua-visits"><?php echo $row->visits; ?></td>
 												</tr>
 											<?php endforeach; ?>
@@ -356,9 +373,10 @@ class User_Activity {
 												<?php 
 													$user = get_userdata( $row->user_ID ); 
 													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
-													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td><?php echo $user_link; ?></td>
 													<td class="ua-visits"><?php echo $row->visits; ?></td>
 												</tr>
 											<?php endforeach; ?>
@@ -382,9 +400,10 @@ class User_Activity {
 												<?php 
 													$user = get_userdata( $row->user_ID ); 
 													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
-													<td><a href="<?php echo network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ); ?>"><?php echo $nicename; ?></a></td>
+													<td><?php echo $user_link; ?></td>
 													<td class="ua-visits"><?php echo $row->visits; ?></td>
 												</tr>
 											<?php endforeach; ?>
@@ -478,6 +497,10 @@ function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $
 		echo $global_after;
 	}
 }
+
+
+
+
 
 /**
  * Show notification if WPMUDEV Update Notifications plugin is not installed
