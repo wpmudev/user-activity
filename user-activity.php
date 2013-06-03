@@ -3,8 +3,8 @@
 Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
-Author: Andrew Billits, Ulrich Sossou
-Version: 1.0.5
+Author: Andrew Billits, Ulrich Sossou, Ignacio Cruz (Incsub)
+Version: 1.0.6
 Network: true
 Text Domain: user_activity
 Author URI: http://premium.wpmudev.org/
@@ -36,7 +36,7 @@ class User_Activity {
 	/**
 	 * Current version of the plugin
 	 **/
-	private $current_version = '1.0.5';
+	private $current_version = '1.0.6';
 
 	private $page_id;
 
@@ -51,6 +51,7 @@ class User_Activity {
 	 * PHP 5 constructor
 	 **/
 	function __construct() {
+
 		add_action( 'admin_init', array( &$this, 'init' ) );
 		if ( is_multisite() ) {
 			add_action( 'admin_menu', array( &$this, 'pre_3_1_network_admin_page' ) );
@@ -61,13 +62,11 @@ class User_Activity {
 		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
 		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
 
-		add_filter( 'cron_schedules', array( &$this, 'my_add_minutely' ) );
+		add_action( 'ua_remove_old_activity', array( &$this, 'remove_old_activity' ) );
 
-		add_action( 'user_activity_remove_old_activity', array( &$this, 'remove_old_activity' ) );
+		register_deactivation_hook( __FILE__, array( &$this, 'deactivate' ) );
 
-	}
-
-	
+	}	
 
 	/**
 	 * PHP 5 constructor
@@ -78,29 +77,24 @@ class User_Activity {
 		if ( ! $current_version || version_compare( $current_version, $this->current_version ) == -1 ) {
 			update_site_option( 'user_activity_version', $this->current_version );
 			$this->install();
-		}			
+		}
+
+		// Do we have to remove old user activity?
+		$transient = get_site_transient( 'user_activity_remove_old_activity' );
+		if ( ! $transient ) {
+			$this->remove_old_activity();
+			set_site_transient( 'user_activity_remove_old_activity', true, 86400 );
+		}
 	}
 
-	function my_add_minutely( $schedules ) {
 
-		// add a 'minutely' schedule to the existing set
-		$schedules['minutely'] = array(
-			'interval' => 2, //2 seconds instead of a minute
-			'display' => __('Once minutely')
-		);
-		return $schedules;
-	}
-
-	function remove_old_activity() {
-		error_log("CRON EXECUTING");
+	private function remove_old_activity() {
 		global $wpdb;
 
-		$last_31_days = time() - 3600;
-		$pq = $wpdb->prepare(
-			"DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_time < %d",
-			$last_31_days
-		);
-		error_log(var_dump($pq));
+		$last_31_days = time() - 2678400;
+
+		$pq = $wpdb->prepare("DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date < %d", $last_31_days);
+		$wpdb->query( $pq );
 	}
 
 	/**
@@ -139,10 +133,11 @@ class User_Activity {
 		      ) ENGINE=MyISAM $db_charset_collate;";
 
 		dbDelta( $sql );
-
-		if ( ! wp_next_scheduled( 'user_activity_remove_old_activity' ) )
-			wp_schedule_event( time(), 'minutely', 'user_activity_remove_old_activity' );
 		
+	}
+
+	public function deactivate() {
+		delete_site_option( 'user_activity_version' );
 	}
 
 	

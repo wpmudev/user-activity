@@ -1,9 +1,16 @@
 Plugin Name: User Activity
-Author: Andrew Billits, Ulrich Sossou
+Author: Andrew Billits, Ulrich Sossou, Ignacio Cruz
 
 Change Log:
 ----------------------------------------------------------------------
 ----------------------------------------------------------------------
+
+
+1.0.6 - 03/06/2013
+----------------------------------------------------------------------
+- Added more stats: today, 7 days and 30 days, based on activity per user
+- Added new table for activity loggin
+- Activity with more than 30 days old is now removed
 
 1.0.5 - 27/05/2013
 ----------------------------------------------------------------------
