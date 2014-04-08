@@ -3,7 +3,7 @@
 Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
-Author: Andrew Billits, Ulrich Sossou, Ignacio Cruz (Incsub)
+Author: WPMUDEV
 Version: 1.0.6
 Network: true
 Text Domain: user_activity
@@ -12,7 +12,7 @@ WDP ID: 3
 */
 
 /*
-Copyright 2007-2011 Incsub (http://incsub.com)
+Copyright 2007-2014 Incsub (http://incsub.com)
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License (Version 2 - GPLv2) as published by
@@ -40,12 +40,6 @@ class User_Activity {
 
 	private $page_id;
 
-	/**
-	 * PHP 4 constructor
-	 **/
-	function User_Activity() {
-		__construct();
-	}
 
 	/**
 	 * PHP 5 constructor
@@ -65,6 +59,11 @@ class User_Activity {
 		add_action( 'ua_remove_old_activity', array( &$this, 'remove_old_activity' ) );
 
 		register_deactivation_hook( __FILE__, array( &$this, 'deactivate' ) );
+
+		if ( did_action( 'plugins_loaded' ) )
+			self::plugin_textdomain();
+		else
+			add_action( 'plugins_loaded', array( __CLASS__, 'plugin_textdomain' ) );
 
 	}	
 
@@ -95,6 +94,10 @@ class User_Activity {
 
 		$pq = $wpdb->prepare("DELETE FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date < %d", $last_31_days);
 		$wpdb->query( $pq );
+	}
+
+	public static function plugin_textdomain() {
+		load_plugin_textdomain( 'user_activity', false, dirname( plugin_basename( __FILE__ ) ) . '/lang/' );
 	}
 
 	/**
@@ -216,17 +219,6 @@ class User_Activity {
 	    wp_enqueue_script( 'postbox' );	 
 	}
 
-
-	/**
-	 * Add a set of custom meta boxes
-	 * 
-	 * @return type
-	 */
-	function active_users_mb() {
-		echo '<table class="form-table">'; 
-        echo "HHHH";
-        echo '</table>';
-	}
 
 	/**
 	 * Admin page output.
@@ -445,7 +437,7 @@ class User_Activity {
 
 }
 
-$user_activity =& new User_Activity();
+$user_activity = new User_Activity();
 
 /**
  * Display number of active users for a specific period of time
@@ -490,23 +482,6 @@ function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $
 		}
 
 		echo $global_after;
-	}
-}
-
-
-
-
-
-/**
- * Show notification if WPMUDEV Update Notifications plugin is not installed
- **/
-if ( !function_exists( 'wdp_un_check' ) ) {
-	add_action( 'admin_notices', 'wdp_un_check', 5 );
-	add_action( 'network_admin_notices', 'wdp_un_check', 5 );
-
-	function wdp_un_check() {
-		if ( !class_exists( 'WPMUDEV_Update_Notifications' ) && current_user_can( 'edit_users' ) )
-			echo '<div class="error fade"><p>' . __('Please install the latest version of <a href="http://premium.wpmudev.org/project/update-notifications/" title="Download Now &raquo;">our free Update Notifications plugin</a> which helps you stay up-to-date with the most stable, secure versions of WPMU DEV themes and plugins. <a href="http://premium.wpmudev.org/wpmu-dev/update-notifications-plugin-information/">More information &raquo;</a>', 'wpmudev') . '</a></p></div>';
 	}
 }
 
