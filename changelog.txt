@@ -1,10 +1,16 @@
 Plugin Name: User Activity
-Author: Andrew Billits, Ulrich Sossou, Ignacio Cruz
+Author: WPMUDEV
 
 Change Log:
 ----------------------------------------------------------------------
 ----------------------------------------------------------------------
 
+1.1 - 2014-04-08
+----------------------------------------------------------------------
+- Added lang domain function
+- Removed old language files
+- Removed deprecated notice
+- More little improvements
 
 1.0.6 - 03/06/2013
 ----------------------------------------------------------------------

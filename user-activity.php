@@ -4,7 +4,7 @@ Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
 Author: WPMUDEV
-Version: 1.0.6
+Version: 1.1
 Network: true
 Text Domain: user_activity
 Author URI: http://premium.wpmudev.org/
@@ -36,7 +36,7 @@ class User_Activity {
 	/**
 	 * Current version of the plugin
 	 **/
-	private $current_version = '1.0.6';
+	private $current_version = '1.1';
 
 	private $page_id;
 
@@ -64,6 +64,10 @@ class User_Activity {
 			self::plugin_textdomain();
 		else
 			add_action( 'plugins_loaded', array( __CLASS__, 'plugin_textdomain' ) );
+
+		global $wpmudev_notices;
+		$wpmudev_notices[] = array( 'id'=> 3,'name'=> 'User Activity', 'screens' => array( 'settings_page_user_activity_main-network' ) );
+		include_once( 'externals/wpmudev-dash-notification.php' );
 
 	}	
 
