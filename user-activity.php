@@ -3,7 +3,7 @@
 Plugin Name: User Activity
 Plugin URI: http://premium.wpmudev.org/project/user-activity
 Description: Collects user activity data and makes it available via a tab under the Site Admin
-Author: WPMUDEV
+Author: WPMU DEV
 Version: 1.1
 Network: true
 Text Domain: user_activity
