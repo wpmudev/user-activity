@@ -46,19 +46,19 @@ class User_Activity {
 	 **/
 	function __construct() {
 
-		add_action( 'admin_init', array( &$this, 'init' ) );
+		add_action( 'admin_init', array( $this, 'init' ) );
 		if ( is_multisite() ) {
-			add_action( 'admin_menu', array( &$this, 'pre_3_1_network_admin_page' ) );
-			add_action( 'network_admin_menu', array( &$this, 'network_admin_page' ) );
+			add_action( 'admin_menu', array( $this, 'pre_3_1_network_admin_page' ) );
+			add_action( 'network_admin_menu', array( $this, 'network_admin_page' ) );
 		} else {
-			add_action( 'admin_menu', array( &$this, 'admin_page' ) );
+			add_action( 'admin_menu', array( $this, 'admin_page' ) );
 		}
-		add_action( 'admin_footer', array( &$this, 'global_db_sync' ) );
-		add_action( 'wp_footer', array( &$this, 'global_db_sync' ) );
+		add_action( 'admin_footer', array( $this, 'global_db_sync' ) );
+		add_action( 'wp_footer', array( $this, 'global_db_sync' ) );
 
-		add_action( 'ua_remove_old_activity', array( &$this, 'remove_old_activity' ) );
+		add_action( 'ua_remove_old_activity', array( $this, 'remove_old_activity' ) );
 
-		register_deactivation_hook( __FILE__, array( &$this, 'deactivate' ) );
+		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
 
 		if ( did_action( 'plugins_loaded' ) )
 			self::plugin_textdomain();
@@ -69,7 +69,7 @@ class User_Activity {
 		$wpmudev_notices[] = array( 'id'=> 3,'name'=> 'User Activity', 'screens' => array( 'settings_page_user_activity_main-network' ) );
 		include_once( 'externals/wpmudev-dash-notification.php' );
 
-	}	
+	}
 
 	/**
 	 * PHP 5 constructor
@@ -119,7 +119,7 @@ class User_Activity {
 			$db_charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
 		if ( ! empty( $wpdb->collate ) )
 			$db_charset_collate .= " COLLATE $wpdb->collate";
-		
+
 		$table = $wpdb->base_prefix . 'user_activity';
 		$sql = "CREATE TABLE $table (
 			active_ID bigint(20) unsigned NOT NULL auto_increment,
@@ -140,14 +140,14 @@ class User_Activity {
 		      ) ENGINE=MyISAM $db_charset_collate;";
 
 		dbDelta( $sql );
-		
+
 	}
 
 	public function deactivate() {
 		delete_site_option( 'user_activity_version' );
 	}
 
-	
+
 
 	/**
 	 * Create or update current user activity entry
@@ -169,15 +169,15 @@ class User_Activity {
 			if ( ! $visited ) {
 				$wpdb->insert(
 					$wpdb->base_prefix . 'user_activity_log',
-					array( 
+					array(
 						'user_ID' => $current_user->ID,
 						'visit_date' => time()
 					),
 					array( '%d', '%d' )
-				);	
+				);
 				set_site_transient( 'user_activity_' . $current_user->ID, true, 1800 );
 			}
-			
+
 		}
 	}
 
@@ -200,27 +200,27 @@ class User_Activity {
 	 * Add network admin page
 	 **/
 	function network_admin_page() {
-		$this->page_id = add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( $this, 'page_main_output' ) );
 	}
 
 	/**
 	 * Add network admin page the old way
 	 **/
 	function pre_3_1_network_admin_page() {
-		$this->page_id = add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( &$this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( $this, 'page_main_output' ) );
 	}
 
 	/**
 	 * Add admin page for singlesite
 	 **/
 	function admin_page() {
-		$this->page_id = add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( &$this, 'page_main_output' ) );		
+		$this->page_id = add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( $this, 'page_main_output' ) );
 	}
 
-	
+
 
 	public function setup_meta_boxes() {
-	    wp_enqueue_script( 'postbox' );	 
+	    wp_enqueue_script( 'postbox' );
 	}
 
 
@@ -237,7 +237,7 @@ class User_Activity {
 			die( __( 'Nice Try...', 'user_activity' ) );
 
 		echo '<div class="wrap">';
-		
+
 		//echo '<div class="postbox">';
 		//do_meta_boxes( 'user_activity_main', 'advanced', 'dfdff' );
 		//echo '</div>';
@@ -257,7 +257,7 @@ class User_Activity {
 
 		$now = time();
 		$last_day = $now - 86400;
-		$today_results = $wpdb->get_results( 
+		$today_results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_day
@@ -265,7 +265,7 @@ class User_Activity {
 		);
 
 		$last_7_days = $now - 604800;
-		$last_7_days_results = $wpdb->get_results( 
+		$last_7_days_results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_7_days
@@ -274,7 +274,7 @@ class User_Activity {
 
 
 		$last_month = $now - 2592000;
-		$last_month_results = $wpdb->get_results( 
+		$last_month_results = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT COUNT(log_ID) visits,user_ID FROM {$wpdb->base_prefix}user_activity_log WHERE visit_date > %d GROUP BY user_ID ORDER BY visits DESC LIMIT 10",
 				$last_month
@@ -334,9 +334,9 @@ class User_Activity {
 										</thead>
 										<tbody>
 											<?php foreach ( $today_results as $row ): ?>
-												<?php 
-													$user = get_userdata( $row->user_ID ); 
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												<?php
+													$user = get_userdata( $row->user_ID );
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
 													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
@@ -361,9 +361,9 @@ class User_Activity {
 										</thead>
 										<tbody>
 											<?php foreach ( $last_7_days_results as $row ): ?>
-												<?php 
-													$user = get_userdata( $row->user_ID ); 
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												<?php
+													$user = get_userdata( $row->user_ID );
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
 													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
@@ -388,9 +388,9 @@ class User_Activity {
 										</thead>
 										<tbody>
 											<?php foreach ( $last_month_results as $row ): ?>
-												<?php 
-													$user = get_userdata( $row->user_ID ); 
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity'); 
+												<?php
+													$user = get_userdata( $row->user_ID );
+													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
 													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
 												?>
 												<tr>
@@ -409,7 +409,7 @@ class User_Activity {
 				</div>
 			</div>
 
-			
+
 			<style>
 
 				.form-table tr {
