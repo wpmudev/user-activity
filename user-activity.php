@@ -157,29 +157,31 @@ class User_Activity {
 	function global_db_sync() {
 		global $wpdb, $current_user;
 
-		if ( '' !== $current_user->ID ) {
-			$tmp_user_activity_count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE user_ID = '%d'", $current_user->ID ) );
+		if ( ! $current_user->ID ) {
+			return;
+		}
 
-			if( '0' == $tmp_user_activity_count )
-				$wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->base_prefix}user_activity ( user_ID, last_active ) VALUES ( '%d', '%d' )", $current_user->ID, time() ) );
-			else
-				$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->base_prefix}user_activity SET last_active = '%d' WHERE user_ID = '%d'", time(), $current_user->ID ) );
+		$tmp_user_activity_count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->base_prefix}user_activity WHERE user_ID = '%d'", $current_user->ID ) );
 
-			// We'll count a visit every 30 minutes, so a refreshing before 30min will not be considered a visit
-			$visited = get_site_transient( 'user_activity_' . $current_user->ID );
+		if ( '0' == $tmp_user_activity_count ) {
+			$wpdb->query( $wpdb->prepare( "INSERT INTO {$wpdb->base_prefix}user_activity ( user_ID, last_active ) VALUES ( '%d', '%d' )", $current_user->ID, time() ) );
+		} else {
+			$wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->base_prefix}user_activity SET last_active = '%d' WHERE user_ID = '%d'", time(), $current_user->ID ) );
+		}
 
-			if ( ! $visited ) {
-				$wpdb->insert(
-					$wpdb->base_prefix . 'user_activity_log',
-					array(
-						'user_ID' => $current_user->ID,
-						'visit_date' => time()
-					),
-					array( '%d', '%d' )
-				);
-				set_site_transient( 'user_activity_' . $current_user->ID, true, 1800 );
-			}
+		// We'll count a visit every 30 minutes, so a refreshing before 30min will not be considered a visit
+		$visited = get_site_transient( 'user_activity_' . $current_user->ID );
 
+		if ( ! $visited ) {
+			$wpdb->insert(
+				$wpdb->base_prefix . 'user_activity_log',
+				array(
+					'user_ID' => $current_user->ID,
+					'visit_date' => time()
+				),
+				array( '%d', '%d' )
+			);
+			set_site_transient( 'user_activity_' . $current_user->ID, true, 1800 );
 		}
 	}
 
@@ -199,47 +201,37 @@ class User_Activity {
 		echo $tmp_output;
 	}
 
+	private function add_admin_menu( $parent_slug, $capability ) {
+
+		$this->page_id = add_submenu_page(
+			$parent_slug,
+			__( 'User Activity', 'user_activity' ),
+			__( 'User Activity', 'user_activity' ),
+			$capability,
+			'user_activity_main',
+			array( $this, 'page_main_output' )
+		);
+	}
+
 	/**
 	 * Add network admin page
 	 */
 	function network_admin_page() {
-
-		$this->page_id = add_submenu_page(
-			'settings.php',
-			__( 'User Activity', 'user_activity' ),
-			__( 'User Activity', 'user_activity' ),
-			'manage_network_options',
-			'user_activity_main',
-			array( $this, 'page_main_output' )
-		);
+		$this->add_admin_menu( 'settings.php', 'manage_network_options' );
 	}
 
 	/**
 	 * Add network admin page the old way
 	 */
 	function pre_3_1_network_admin_page() {
-		$this->page_id = add_submenu_page(
-			'ms-admin.php',
-			__( 'User Activity', 'user_activity' ),
-			__( 'User Activity', 'user_activity' ),
-			'manage_network_options',
-			'user_activity_main',
-			array( $this, 'page_main_output' )
-		);
+		$this->add_admin_menu( 'ms-admin.php', 'manage_network_options' );
 	}
 
 	/**
 	 * Add admin page for singlesite
 	 */
 	function admin_page() {
-		$this->page_id = add_submenu_page(
-			'users.php',
-			__( 'User Activity', 'user_activity' ),
-			__( 'User Activity', 'user_activity' ),
-			'edit_users',
-			'user_activity_main',
-			array( $this, 'page_main_output' )
-		);
+		$this->add_admin_menu( 'users.php', 'edit_users' );
 	}
 
 	public function setup_meta_boxes() {
@@ -432,35 +424,34 @@ class User_Activity {
 			</div>
 		</div>
 
-
 		<style>
 
-			.form-table tr {
-				border-bottom: 1px solid #DEDEDE;
-			}
+		.form-table tr {
+			border-bottom: 1px solid #DEDEDE;
+		}
 
-			.form-table tr:last-child {
-				border-bottom: none;
-			}
+		.form-table tr:last-child {
+			border-bottom: none;
+		}
 
-			.postbox {
-				width: 20%;
-				margin-right: 4%;
-				float: left;
-			}
+		.postbox {
+			width: 20%;
+			margin-right: 4%;
+			float: left;
+		}
 
-			.form-table h4 {
-				line-height: 1.7em;
-				font-weight: normal;
-				font-size: 13px;
-				margin: 0 0 .2em;
-				padding: 0;
-				font-family: Georgia, "Times New Roman", "Bitstream Charter", Times, serif;
-			}
+		.form-table h4 {
+			line-height: 1.7em;
+			font-weight: normal;
+			font-size: 13px;
+			margin: 0 0 .2em;
+			padding: 0;
+			font-family: Georgia, "Times New Roman", "Bitstream Charter", Times, serif;
+		}
 
-			.ua-visits {
-				text-align: center;
-			}
+		.ua-visits {
+			text-align: center;
+		}
 
 		</style>
 		<?php
@@ -508,16 +499,19 @@ function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $
 			echo $before;
 
 			$user = get_user_by( 'id', $active_user['user_ID'] );
-			$display_name = empty( $user->display_name ) ? $user->display_name : $user->user_login;
+			$display_name = empty( $user->display_name ) ? $user->user_login : $user->display_name;
 
 			$primary_blog = get_active_blog_for_user( $active_user['user_ID'] );
 
 			if ( 'yes' == $avatars ) {
-				echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ),
-					' <a href="http://' . $primary_blog->domain . $primary_blog->path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
+				echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) );
+				printf(
+					' <a href="%s" style="text-decoration: none; border: none;">%s</a>',
+					esc_url( 'http://' . $primary_blog->domain . $primary_blog->path ), esc_html( $display_name )
+				);
 
 			} else {
-				echo '<a href="' . get_site_url( $primary_blog->blog_id, '/' ) . '">' . $display_name . '</a>';
+				printf( '<a href="%s">%s</a>', get_site_url( $primary_blog->blog_id, '/' ), $display_name );
 			}
 
 			echo $after;
