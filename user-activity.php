@@ -30,50 +30,54 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 /**
  * Plugin main class
- **/
+ */
 class User_Activity {
 
 	/**
 	 * Current version of the plugin
-	 **/
+	 */
 	private $current_version = '1.1';
 
 	private $page_id;
 
-
 	/**
-	 * PHP 5 constructor
-	 **/
+	 * Constructor
+	 */
 	function __construct() {
 
 		add_action( 'admin_init', array( $this, 'init' ) );
+
 		if ( is_multisite() ) {
 			add_action( 'admin_menu', array( $this, 'pre_3_1_network_admin_page' ) );
 			add_action( 'network_admin_menu', array( $this, 'network_admin_page' ) );
 		} else {
 			add_action( 'admin_menu', array( $this, 'admin_page' ) );
 		}
+
 		add_action( 'admin_footer', array( $this, 'global_db_sync' ) );
 		add_action( 'wp_footer', array( $this, 'global_db_sync' ) );
 
 		add_action( 'ua_remove_old_activity', array( $this, 'remove_old_activity' ) );
 
-		register_deactivation_hook( __FILE__, array( $this, 'deactivate' ) );
-
-		if ( did_action( 'plugins_loaded' ) )
+		if ( did_action( 'plugins_loaded' ) ) {
 			self::plugin_textdomain();
-		else
+		} else {
 			add_action( 'plugins_loaded', array( __CLASS__, 'plugin_textdomain' ) );
+		}
 
 		global $wpmudev_notices;
-		$wpmudev_notices[] = array( 'id'=> 3,'name'=> 'User Activity', 'screens' => array( 'settings_page_user_activity_main-network' ) );
-		include_once( 'externals/wpmudev-dash-notification.php' );
+		$wpmudev_notices[] = array(
+			'id' => 3,
+			'name' => __( 'User Activity', 'user_activity' ),
+			'screens' => array( 'settings_page_user_activity_main-network' ),
+		);
 
+		include_once 'externals/wpmudev-dash-notification.php';
 	}
 
 	/**
-	 * PHP 5 constructor
-	 **/
+	 * Initializer
+	 */
 	function init() {
 
 		$current_version = get_site_option( 'user_activity_version' );
@@ -106,19 +110,24 @@ class User_Activity {
 
 	/**
 	 * Create plugin tables
-	 **/
+	 */
 	function install() {
 		global $wpdb;
 
-		if( @is_file( ABSPATH . '/wp-admin/includes/upgrade.php' ) )
-			include_once( ABSPATH . '/wp-admin/includes/upgrade.php' );
-		else
-			die( __( 'We have problem finding your \'/wp-admin/upgrade-functions.php\' and \'/wp-admin/includes/upgrade.php\'', 'user_activity' ) );
+		if ( @is_file( ABSPATH . '/wp-admin/includes/upgrade.php' ) ) {
+			include_once ABSPATH . '/wp-admin/includes/upgrade.php';
+		} else {
+			die( __( "Unable to find 'wp-admin/upgrade-functions.php' and 'wp-admin/includes/upgrade.php'", 'user_activity' ) );
+		}
 
-		if ( ! empty( $wpdb->charset ) )
-			$db_charset_collate = "DEFAULT CHARACTER SET $wpdb->charset";
-		if ( ! empty( $wpdb->collate ) )
+		$db_charset_collate = '';
+
+		if ( ! empty( $wpdb->charset ) ) {
+			$db_charset_collate .= "DEFAULT CHARACTER SET $wpdb->charset";
+		}
+		if ( ! empty( $wpdb->collate ) ) {
 			$db_charset_collate .= " COLLATE $wpdb->collate";
+		}
 
 		$table = $wpdb->base_prefix . 'user_activity';
 		$sql = "CREATE TABLE $table (
@@ -140,18 +149,11 @@ class User_Activity {
 		      ) ENGINE=MyISAM $db_charset_collate;";
 
 		dbDelta( $sql );
-
 	}
-
-	public function deactivate() {
-		delete_site_option( 'user_activity_version' );
-	}
-
-
 
 	/**
 	 * Create or update current user activity entry
-	 **/
+	 */
 	function global_db_sync() {
 		global $wpdb, $current_user;
 
@@ -183,7 +185,8 @@ class User_Activity {
 
 	/**
 	 * Get activity from db for a set period of type
-	 **/
+	 * @param string|int $tmp_period
+	 */
 	function get_activity( $tmp_period ) {
 		global $wpdb, $current_user;
 
@@ -198,43 +201,63 @@ class User_Activity {
 
 	/**
 	 * Add network admin page
-	 **/
+	 */
 	function network_admin_page() {
-		$this->page_id = add_submenu_page( 'settings.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( $this, 'page_main_output' ) );
+
+		$this->page_id = add_submenu_page(
+			'settings.php',
+			__( 'User Activity', 'user_activity' ),
+			__( 'User Activity', 'user_activity' ),
+			'manage_network_options',
+			'user_activity_main',
+			array( $this, 'page_main_output' )
+		);
 	}
 
 	/**
 	 * Add network admin page the old way
-	 **/
+	 */
 	function pre_3_1_network_admin_page() {
-		$this->page_id = add_submenu_page( 'ms-admin.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'manage_network_options', 'user_activity_main', array( $this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page(
+			'ms-admin.php',
+			__( 'User Activity', 'user_activity' ),
+			__( 'User Activity', 'user_activity' ),
+			'manage_network_options',
+			'user_activity_main',
+			array( $this, 'page_main_output' )
+		);
 	}
 
 	/**
 	 * Add admin page for singlesite
-	 **/
+	 */
 	function admin_page() {
-		$this->page_id = add_submenu_page( 'users.php', __( 'User Activity', 'user_activity' ), __( 'User Activity', 'user_activity' ), 'edit_users', 'user_activity_main', array( $this, 'page_main_output' ) );
+		$this->page_id = add_submenu_page(
+			'users.php',
+			__( 'User Activity', 'user_activity' ),
+			__( 'User Activity', 'user_activity' ),
+			'edit_users',
+			'user_activity_main',
+			array( $this, 'page_main_output' )
+		);
 	}
-
-
 
 	public function setup_meta_boxes() {
 	    wp_enqueue_script( 'postbox' );
 	}
 
-
 	/**
 	 * Admin page output.
-	 **/
+	 */
 	function page_main_output() {
 		global $wpdb, $wp_roles, $current_user, $wp_meta_boxes;
 
 		// Allow access for users with correct permissions only
-		if ( is_multisite() && ! current_user_can( 'manage_network_options' ) )
+		if ( is_multisite() && ! current_user_can( 'manage_network_options' ) ) {
 			die( __( 'Nice Try...', 'user_activity' ) );
-		elseif ( ! is_multisite() && ! current_user_can( 'manage_options' ) )
+		} elseif ( ! is_multisite() && ! current_user_can( 'manage_options' ) ) {
 			die( __( 'Nice Try...', 'user_activity' ) );
+		}
 
 		echo '<div class="wrap">';
 
@@ -282,160 +305,164 @@ class User_Activity {
 		);
 
 		?>
-			<h2><?php _e( 'User Activity', 'user_activity' ); ?></h2>
+		<h2><?php _e( 'User Activity', 'user_activity' ); ?></h2>
 
-			<div id="poststuff">
-			    <div id="post-body" class="metabox-holder columns-1">
-	                <div id="postbox-container-1" class="postbox-container">
-	                    <div id="advanced-sortables" class="meta-box-sortables ui-sortable">
-							<div id="ua-totals-box" class="postbox" style="display: block;">
-								<div class="handlediv" title="Haz clic para cambiar"><br></div>
-								<h3 class="hndle"><span><?php _e( 'Totals', 'user_activity' ); ?></span></h3>
-								<div class="inside">
-									<table class="form-table">
-										<thead>
-											<th><h4><?php _e( 'Active users in the last', 'user_activity' ); ?></h4></th>
-											<th><h4 class="ua-visits"><?php _e( 'Unique visits', 'user_activity' ); ?></h4></th>
-										</thead>
-										<tbody>
-											<tr>
-												<td><?php _e( 'Five Minutes', 'user_activity' ); ?></td>
-												<td class="ua-visits"><?php echo $five_minutes; ?></td>
-											</tr>
-											<tr>
-												<td><?php _e( 'Hour', 'user_activity' ); ?></td>
-												<td class="ua-visits"><?php echo $hour; ?></td>
-											</tr>
-											<tr>
-												<td><?php _e( 'Day', 'user_activity' ); ?></td>
-												<td class="ua-visits"><?php echo $day; ?></td>
-											</tr>
-											<tr>
-												<td><?php _e( 'Week', 'user_activity' ); ?></td>
-												<td class="ua-visits"><?php echo $week; ?></td>
-											</tr>
-											<tr>
-												<td><?php _e( '30 days', 'user_activity' ); ?></td>
-												<td class="ua-visits"><?php echo $month; ?></td>
-											</tr>
-										</tbody>
-									</table>
-								</div>
+		<div id="poststuff">
+			<div id="post-body" class="metabox-holder columns-1">
+				<div id="postbox-container-1" class="postbox-container">
+					<div id="advanced-sortables" class="meta-box-sortables ui-sortable">
+						<div id="ua-totals-box" class="postbox" style="display: block;">
+							<div class="handlediv" title="Haz clic para cambiar"><br></div>
+							<h3 class="hndle"><span><?php _e( 'Totals', 'user_activity' ); ?></span></h3>
+							<div class="inside">
+								<table class="form-table">
+									<thead>
+									<th><h4><?php _e( 'Active users in the last', 'user_activity' ); ?></h4></th>
+									<th><h4 class="ua-visits"><?php _e( 'Unique visits', 'user_activity' ); ?></h4></th>
+									</thead>
+									<tbody>
+									<tr>
+										<td><?php _e( 'Five Minutes', 'user_activity' ); ?></td>
+										<td class="ua-visits"><?php echo $five_minutes; ?></td>
+									</tr>
+									<tr>
+										<td><?php _e( 'Hour', 'user_activity' ); ?></td>
+										<td class="ua-visits"><?php echo $hour; ?></td>
+									</tr>
+									<tr>
+										<td><?php _e( 'Day', 'user_activity' ); ?></td>
+										<td class="ua-visits"><?php echo $day; ?></td>
+									</tr>
+									<tr>
+										<td><?php _e( 'Week', 'user_activity' ); ?></td>
+										<td class="ua-visits"><?php echo $week; ?></td>
+									</tr>
+									<tr>
+										<td><?php _e( '30 days', 'user_activity' ); ?></td>
+										<td class="ua-visits"><?php echo $month; ?></td>
+									</tr>
+									</tbody>
+								</table>
 							</div>
-
-							<div id="ua-today-box" class="postbox" style="display: block;">
-								<div class="handlediv" title="Haz clic para cambiar"><br></div>
-								<h3 class="hndle"><span><?php _e( 'Today', 'user_activity' ); ?></span></h3>
-								<div class="inside">
-									<table class="form-table">
-										<thead>
-											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
-											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
-										</thead>
-										<tbody>
-											<?php foreach ( $today_results as $row ): ?>
-												<?php
-													$user = get_userdata( $row->user_ID );
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
-													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
-												?>
-												<tr>
-													<td><?php echo $user_link; ?></td>
-													<td class="ua-visits"><?php echo $row->visits; ?></td>
-												</tr>
-											<?php endforeach; ?>
-										</tbody>
-
-									</table>
-								</div>
-							</div>
-
-							<div id="ua-seven-days-box" class="postbox" style="display: block;">
-								<div class="handlediv" title="Haz clic para cambiar"><br></div>
-								<h3 class="hndle"><span><?php _e( 'Last 7 days', 'user_activity' ); ?></span></h3>
-								<div class="inside">
-									<table class="form-table">
-										<thead>
-											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
-											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
-										</thead>
-										<tbody>
-											<?php foreach ( $last_7_days_results as $row ): ?>
-												<?php
-													$user = get_userdata( $row->user_ID );
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
-													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
-												?>
-												<tr>
-													<td><?php echo $user_link; ?></td>
-													<td class="ua-visits"><?php echo $row->visits; ?></td>
-												</tr>
-											<?php endforeach; ?>
-										</tbody>
-
-									</table>
-								</div>
-							</div>
-
-							<div id="ua-30-days-box" class="postbox" style="display: block;">
-								<div class="handlediv" title="Haz clic para cambiar"><br></div>
-								<h3 class="hndle"><span><?php _e( 'Last 30 days', 'user_activity' ); ?></span></h3>
-								<div class="inside">
-									<table class="form-table">
-										<thead>
-											<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
-											<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
-										</thead>
-										<tbody>
-											<?php foreach ( $last_month_results as $row ): ?>
-												<?php
-													$user = get_userdata( $row->user_ID );
-													$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity');
-													$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
-												?>
-												<tr>
-													<td><?php echo $user_link; ?></td>
-													<td class="ua-visits"><?php echo $row->visits; ?></td>
-												</tr>
-											<?php endforeach; ?>
-										</tbody>
-
-									</table>
-								</div>
-							</div>
-
 						</div>
-	                </div>
+
+						<div id="ua-today-box" class="postbox" style="display: block;">
+							<div class="handlediv" title="Haz clic para cambiar"><br></div>
+							<h3 class="hndle"><span><?php _e( 'Today', 'user_activity' ); ?></span></h3>
+							<div class="inside">
+								<table class="form-table">
+									<thead>
+									<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+									<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+									</thead>
+									<tbody>
+									<?php foreach ( $today_results as $row ): ?>
+										<?php
+										$user = get_userdata( $row->user_ID );
+										$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity' );
+										$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
+										?>
+										<tr>
+											<td><?php echo $user_link; ?></td>
+											<td class="ua-visits"><?php echo $row->visits; ?></td>
+										</tr>
+									<?php endforeach; ?>
+									</tbody>
+
+								</table>
+							</div>
+						</div>
+
+						<div id="ua-seven-days-box" class="postbox" style="display: block;">
+							<div class="handlediv" title="Haz clic para cambiar"><br></div>
+							<h3 class="hndle"><span><?php _e( 'Last 7 days', 'user_activity' ); ?></span></h3>
+							<div class="inside">
+								<table class="form-table">
+									<thead>
+									<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+									<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+									</thead>
+									<tbody>
+									<?php foreach ( $last_7_days_results as $row ): ?>
+										<?php
+										$user = get_userdata( $row->user_ID );
+										$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity' );
+										$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
+										?>
+										<tr>
+											<td><?php echo $user_link; ?></td>
+											<td class="ua-visits"><?php echo $row->visits; ?></td>
+										</tr>
+									<?php endforeach; ?>
+									</tbody>
+
+								</table>
+							</div>
+						</div>
+
+						<div id="ua-30-days-box" class="postbox" style="display: block;">
+							<div class="handlediv" title="Haz clic para cambiar"><br></div>
+							<h3 class="hndle"><span><?php _e( 'Last 30 days', 'user_activity' ); ?></span></h3>
+							<div class="inside">
+								<table class="form-table">
+									<thead>
+									<th><h4><?php _e( 'User', 'user_activity' ); ?></h4></th>
+									<th><h4 class="ua-visits"><?php _e( 'Visits', 'user_activity' ); ?></h4></th>
+									</thead>
+									<tbody>
+									<?php foreach ( $last_month_results as $row ): ?>
+										<?php
+										$user = get_userdata( $row->user_ID );
+										$nicename = isset( $user->data->user_nicename ) ? $user->data->user_nicename : __( 'Unknown', 'user_activity' );
+										$user_link = $user ? '<a href="' . network_admin_url( 'user-edit.php?user_id=' . $row->user_ID ) . '">' . $nicename . '</a>' : $nicename;
+										?>
+										<tr>
+											<td><?php echo $user_link; ?></td>
+											<td class="ua-visits"><?php echo $row->visits; ?></td>
+										</tr>
+									<?php endforeach; ?>
+									</tbody>
+
+								</table>
+							</div>
+						</div>
+
+					</div>
 				</div>
 			</div>
+		</div>
 
 
-			<style>
+		<style>
 
-				.form-table tr {
-					border-bottom:1px solid #DEDEDE;
-				}
-				.form-table tr:last-child {
-					border-bottom:none;
-				}
-				.postbox {
-					width:20%;
-					margin-right:4%;
-					float:left;
-				}
-				.form-table h4 {
-					line-height: 1.7em;
-					font-weight: normal;
-					font-size: 13px;
-					margin: 0 0 .2em;
-					padding: 0;
-					font-family: Georgia, "Times New Roman", "Bitstream Charter", Times, serif;
-				}
-				.ua-visits {
-					text-align:center;
-				}
+			.form-table tr {
+				border-bottom: 1px solid #DEDEDE;
+			}
 
-			</style>
+			.form-table tr:last-child {
+				border-bottom: none;
+			}
+
+			.postbox {
+				width: 20%;
+				margin-right: 4%;
+				float: left;
+			}
+
+			.form-table h4 {
+				line-height: 1.7em;
+				font-weight: normal;
+				font-size: 13px;
+				margin: 0 0 .2em;
+				padding: 0;
+				font-family: Georgia, "Times New Roman", "Bitstream Charter", Times, serif;
+			}
+
+			.ua-visits {
+				text-align: center;
+			}
+
+		</style>
 		<?php
 	}
 
@@ -445,16 +472,26 @@ $user_activity = new User_Activity();
 
 /**
  * Display number of active users for a specific period of time
- **/
+ *
+ * @param $tmp_period
+ */
 function display_user_activity( $tmp_period ) {
 	global $user_activity;
-
-	echo $user_activity->get_activity( $tmp_period );
+	$user_activity->get_activity( $tmp_period );
 }
 
 /**
  * Display last active users
- **/
+ *
+ * @param int    $minutes
+ * @param int    $limit
+ * @param string $global_before
+ * @param string $before
+ * @param string $global_after
+ * @param string $after
+ * @param string $avatars
+ * @param int    $avatar_size
+ */
 function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $before = '', $global_after = '', $after = '', $avatars = 'yes', $avatar_size = 32 ) {
 	global $wpdb;
 
@@ -475,8 +512,9 @@ function user_activity_output( $minutes = 5, $limit = 10, $global_before = '', $
 
 			$primary_blog = get_active_blog_for_user( $active_user['user_ID'] );
 
-			if( 'yes' == $avatars ) {
-				echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ) . ' <a href="http://' . $primary_blog->domain . $primary_blog->path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
+			if ( 'yes' == $avatars ) {
+				echo get_avatar( $active_user['user_ID'], $avatar_size, get_option( 'avatar_default' ) ),
+					' <a href="http://' . $primary_blog->domain . $primary_blog->path . '" style="text-decoration:none;border:none;">' . $display_name . '</a>';
 
 			} else {
 				echo '<a href="' . get_site_url( $primary_blog->blog_id, '/' ) . '">' . $display_name . '</a>';
